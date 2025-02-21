@@ -139,7 +139,7 @@ except Exception as e:
 if introspection_query_success == False:
   suggestions_success = False
   suggestions_partial_success = False
-  with open("overallWordlistClean.txt", "r") as english_words:
+  with open("1k-english.txt", "r") as english_words:
     english_word_str = " ".join([word.strip() for word in english_words.readlines()])
     suggestion_query = "query {{ {0} }}".format(english_word_str)
     try:
