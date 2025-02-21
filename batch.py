@@ -3,7 +3,11 @@ import requests
 import argparse
 import sys
 import urllib3
+import time
+import random
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+pymojis = ["🐬", "🌞", "🔥", "🎀", "⚜️", "🩻", "✅"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-e", "--endpoint", help="GraphQL Endpoint (i.e. https://example.com/graphql).")
@@ -22,11 +26,12 @@ if args.endpoint is None:
   sys.exit()
 
 # parse headers
-header_dict = {}
+header_dict = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"}
 if args.header:
   for header in args.header:
-    point_index = header.find(":")
-    header_dict[header[:point_index].strip()] = header[point_index+1:].strip()
+    for i in range(len(header)):
+      header_i = header[i].split(":")
+      header_dict[header_i[0].strip()] = header_i[1].strip()
 
 # initialise proxy dict
 proxies = {'http':args.proxy, 'https': args.proxy}
@@ -134,7 +139,7 @@ except Exception as e:
 if introspection_query_success == False:
   suggestions_success = False
   suggestions_partial_success = False
-  with open("1k-english.txt", "r") as english_words:
+  with open("overallWordlistClean.txt", "r") as english_words:
     english_word_str = " ".join([word.strip() for word in english_words.readlines()])
     suggestion_query = "query {{ {0} }}".format(english_word_str)
     try:
@@ -222,8 +227,10 @@ if args.query is None or args.wordlist is None or args.size is None:
 with open(args.query, "r") as gql_query:
   gql_str = gql_query.read()
 
+print()
 with open(args.wordlist, "r") as wordlist:
   wordlist_list = wordlist.readlines()
+  start = time.time()
   for i in range(0, len(wordlist_list), int(args.size)):
     gql_list_dict = []
     for word in wordlist_list[i:i+int(args.size)]:
@@ -233,9 +240,18 @@ with open(args.wordlist, "r") as wordlist:
       else:
         generated_variables = args.variable.replace("#VARIABLE#", word.strip())
         gql_list_dict.append({"query": gql_str, "variables": json.loads(generated_variables)})
-    attempt_str = "GraphQL Batch Attempt: {}".format(",".join([word.strip() for word in wordlist_list[i:i+int(args.size)]]))
-    print(attempt_str)
+    beep = time.time()
+    dt = beep-start
+    eta = 0 if i==0 else (1.0-(i*1.0/len(wordlist_list)))*dt/(i*1.0/len(wordlist_list))
+    if (r.json()[0].get("data")):
+      print("\rProgress: \033[96m{:.2f}%\033[00m  ".format(i*100.0/len(wordlist_list)) +
+            "ETA: \033[93m{:.0f} mins.\033[00m    ".format(eta/60) + 
+            pymojis[random.randrange(0, len(pymojis))] +
+            f"  Success: \033[92m{r.json()[0].get('data')}\033[00m\r", end='', flush=True)
+    else:
+      print("\rProgress: \033[96m{:.2f}%\033[00m  ".format(i*100.0/len(wordlist_list)) +
+            "ETA: \033[93m{:.0f} mins.\033[00m    \r".format(eta/60), end='', flush=True)
     r = requests.post(args.endpoint, headers=header_dict, json=gql_list_dict, proxies=proxies, verify=False)
-    if args.output:
+    if args.output and (r.json()[0].get("data")):
       with open(args.output, "a") as output_file:
-        output_file.write("{}: {}\n".format(attempt_str, r.json()))
+        output_file.write("{}\n".format(r.json()[0].get("data")))
